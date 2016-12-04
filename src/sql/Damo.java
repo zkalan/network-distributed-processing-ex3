@@ -16,7 +16,7 @@ public class Damo {
 		
 		//String createTable = "CREATE TABLE meeting (id int not null, name varchar(20) not null, age int null, primary key (id));";
 		
-		ConnectDB connection  = new ConnectDB(); 
+		operateDB connection  = new operateDB(); 
 		
 		//ResultSet rscreateTable = connection.executeSQL(createTable);
 		
