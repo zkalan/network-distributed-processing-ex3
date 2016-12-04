@@ -23,7 +23,7 @@ public class Damo {
 		ResultSet rssql = connection.executeSQL(sql);
 		
 		while(rssql.next()){
-			System.out.println(rssql.getString(1));
+			System.out.println(rssql.getString(1) + " " +rssql.getString(2) + " " + rssql.getString(3) + " " + rssql.getString(4) + " " + rssql.getString(5));
 		}
 //		
 //		while(rscreateTable.next()){
