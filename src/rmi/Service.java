@@ -43,6 +43,8 @@ public class Service {
 			return true;
 		}
 	}
+	
+	
 	/**
 	 * 通过用户名查询用户的信息
 	 * @param username
@@ -64,6 +66,22 @@ public class Service {
 		return connection.updateSQL(sql);
 	}
 	/**
+	 * 通过用户名判断某个用户是否存在
+	 * @param username
+	 * @return
+	 * @throws SQLException
+	 */
+	public boolean userExist(String username) throws SQLException{
+		ResultSet tempresultSet = this.searchUserByUserName(username);
+		if (false == tempresultSet.next()){
+			return false;
+		} else {
+			return true;
+		}
+	}
+	
+	
+	/**
 	 * 通过会议标题查询会议的信息
 	 * @param username
 	 * @return
@@ -73,6 +91,27 @@ public class Service {
 		return connection.executeSQL(sql);
 	}
 	/**
+	 * 当会议被创建、查询、删除时判断会议是否存在
+	 * @param username
+	 * @param title
+	 * @return
+	 * @throws SQLException
+	 */
+	public boolean conferenceExist(String username,String title) throws SQLException{
+		resultSet = this.searchUserByUserName(username);
+		while (resultSet.next()){
+			sql = "select * from meeting where meeting_createrId='" + resultSet.getString(1) + "';";
+		}
+		resultSet = connection.executeSQL(sql);
+		while (resultSet.next()){
+			if(title == resultSet.getString(2)){
+				return true;
+			}
+		}
+		return false;
+	}
+	/**
+	 * 向会议表中插入新的会议
 	 * 将会议创建并返回1或-1
 	 * 然后将创建人插入到记录表中
 	 * @param username
@@ -82,44 +121,125 @@ public class Service {
 	 * @return
 	 * @throws SQLException
 	 */
-	public int conferenceInsert(String username,String starttime,String endtime,String title) throws SQLException{
-		//首先创建会议
-		//先要获得登录用户的id
-		resultSet = this.searchUserByUserName(username);
-		String user_id = null;
-		while(resultSet.next()){
-			user_id = resultSet.getString(1);
-		}
+	public int conferenceInsert(String user_id,String starttime,String endtime,String title) throws SQLException{
+		
 		//构造将要执行的插入语句
 		sql = "insert into meeting (meeting_title,meeting_createrId,meeting_startDatetime,meeting_endDatetime) "
 				+ "values ('" + title +"','" + user_id + "','" + starttime + "','" + endtime +"');";
 		int conferenceInsertResult = connection.updateSQL(sql);
 		
-		//通过查询获得会议的id
-		resultSet = this.searchMeetingByTitle(title);
-		String meeting_id = null;
-		while (resultSet.next()){
-			meeting_id = resultSet.getString(1);
-		}
-		
-		//将创建会议的用户本身插入到记录表里去
-		this.recordInsert(user_id, meeting_id);
-		
 		//返回会议创建结果
 		return conferenceInsertResult;
 	}
 	/**
-	 * 将用户插入到记录表里去
+	 * 通过标题删除指定会议
+	 * 注意
+	 * 会议的相关记录也会被删除
+	 * @param title
+	 * @return
+	 */
+	public boolean deleteConferenceByTitle(String title){
+		sql = "delete meeting from meeting where meeting_title='" + title + "';";
+		try {
+			connection.executeSQL(sql);
+			return true;
+		} catch(Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/**
+	 * 删除指定用户名下所有创建的会议
+	 * @param user_id
+	 * @return
+	 */
+	public boolean deleteConferenceByUserId(String user_id){
+		sql = "delete meeting from meeting where meeting_createrId='" + user_id + "';";
+		try {
+			connection.executeSQL(sql);
+			return true;
+		} catch(Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/**
+	 * 删除某个用户名下指定的某个会议
+	 * @param user_id
+	 * @param meeting_title
+	 * @return
+	 */
+	public boolean deleteConferenceByTitleOfUser(String user_id,String meeting_title){
+		sql = "delete meeting from meeting where meeting_createrId='" + user_id + "' and meeting_title='" + meeting_title + "';";
+		try {
+			connection.executeSQL(sql);
+			return true;
+		} catch(Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	
+	/**
+	 * 通过用户id查询获取记录
+	 * 通过会议id查询获取记录
+	 * @param user_id
+	 * @return
+	 */
+	public ResultSet searchRecordByUserId(String user_id){
+		sql = "select * from record where record_user_id='" + user_id + "';";
+		return connection.executeSQL(sql);
+	}
+	public ResultSet searchRecordByConferenceId(String meeting_id){
+		sql = "select * from record where record_meeting_id='" + meeting_id + "';";
+		return connection.executeSQL(sql);
+	}
+	/**
+	 * 添加记录
 	 * @param user_id
 	 * @param meeting_id
 	 * @return
 	 */
 	public int recordInsert(String user_id,String meeting_id){
-		//将创建会议的用户本身插入到记录表里去
 		sql = "insert into record (record_user_id,record_meeting_id) "
 				+ "values ('" + user_id + "','" + meeting_id + "');";
 		return connection.updateSQL(sql);
 	}
+	/**
+	 * 通过用户的id删除其名下的参加的所有会议
+	 * @param user_id
+	 * @return
+	 */
+	public boolean deleteRecordByUser(String user_id){
+		sql = "delete record from record where record_user_id='" + user_id + "';";
+		try {
+			connection.updateSQL(sql);
+			return true;
+		} catch (Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/**
+	 * 删除某个会议名下的某个参与者
+	 * 也可以称之为退出某个会议
+	 * @param user_id
+	 * @param meeting_id
+	 * @return
+	 */
+	public boolean deleteRecordByUserOfConference(String user_id,String meeting_id){
+		sql = "delete record from record where record_user_id='" + user_id + "' and record_meeting_id='" + meeting_id + "';";
+		try {
+			connection.updateSQL(sql);
+			return true;
+		} catch (Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	
 	/**
 	 * 注册账户
 	 * 能够检测用户名是否存在
@@ -145,25 +265,13 @@ public class Service {
 			}
 		}
 	}
-	/**
-	 * 当会议被创建、查询、删除时判断会议是否存在
-	 * @param username
-	 * @param title
-	 * @return
-	 * @throws SQLException
-	 */
-	public boolean conferenceExist(String username,String title) throws SQLException{
-		resultSet = this.searchUserByUserName(username);
-		while (resultSet.next()){
-			sql = "select * from meeting where meeting_createrId='" + resultSet.getString(1) + "';";
-		}
-		resultSet = connection.executeSQL(sql);
-		if(false == resultSet.next()){
-			return false;
-		} else {
-			return true;
-		}
+	public void addConference(String username,String starttime,String endtime,String title){
+		//首先判断用户是否登录成功
+		//然后判断该用户名下是否有同名会议
+		//然后判断参与者是否存在
+		//然后判断参与者是否已经加入该会议
 	}
+
 	/**
 	 * 
 	 * @param username
