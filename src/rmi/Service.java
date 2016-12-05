@@ -58,6 +58,19 @@ public class Service {
 		return connection.executeSQL(sql);
 	}
 	/**
+	 * 通过用户的名字返回它的id
+	 * @param username
+	 * @return
+	 * @throws SQLException
+	 */
+	public String getUserIdByName(String username) throws SQLException{
+		ResultSet rs = searchUserByUserName(username);
+		while (rs.next()){
+			return rs.getString(1);
+		}
+		return null;
+	}
+	/**
 	 * 向用户表插入新的值
 	 * @param username
 	 * @param passwd
@@ -369,11 +382,7 @@ public class Service {
 		boolean meetingflag = this.conferenceExist(username, title);
 		if(loginflag && !meetingflag){
 			//获取用户的id
-			ResultSet rs = this.searchUserByUserName(username);
-			String user_id = null;
-			while (rs.next()){
-				user_id = rs.getString(1);
-			}
+			String user_id = this.getUserIdByName(username);
 			//首先判断这个用户是否有时间创建这个会议
 			if(haveUserTimeConflict(user_id,starttime,endtime)){
 				System.out.println("User time conflict, conference create failure");
@@ -426,11 +435,7 @@ public class Service {
 				System.out.println("User " + otherUser[i] + " not exists");
 			} else {
 				//获得用户的id
-				ResultSet rs = this.searchUserByUserName(otherUser[i]);
-				String user_id = null;
-				while (rs.next()){
-					user_id = rs.getString(1);
-				}
+				String user_id = this.getUserIdByName(otherUser[i]);
 				//该用户是否已经加入了该会议
 				boolean alreadyAttend = this.recordOfUserInConferenceExist(meeting_id,user_id);
 				if (alreadyAttend){
@@ -464,7 +469,72 @@ public class Service {
 			}
 		}
 	}
-///////////////////////////////////删除指定会议///////////////////////////////////////////////////
+/////////////////////////////////////////////查询指定时间段内的会议////////////////////////////////////////////////
+	
+	/**
+	 * 查询指定时间段内的会议
+	 * 按照时间排序 升序
+	 * @param user_name
+	 * @param starttime
+	 * @param endtime
+	 * @throws SQLException
+	 * @throws ParseException
+	 */
+	public void conferenceSearch(String user_name,String starttime,String endtime) throws SQLException, ParseException{
+		//统计有多少会议满足时间要求
+		int i = 0;
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+		Date Start = sdf.parse(starttime);
+		Date End = sdf.parse(endtime);
+		Date cStart = null,cEnd = null;
+		String user_id = this.getUserIdByName(user_name);
+		ResultSet conferenceSet = this.searchRecordByUserId(user_id);
+		System.out.println("id | title | CId | meeting_startDatetime | meeting_endDatetime | attender");
+		//循环获得记录表中的指定用户参与的会议
+		while(conferenceSet.next()){
+			String meeting_id = conferenceSet.getString(3);
+			ResultSet conference = this.searchMeetingById(meeting_id);
+			String starttimestr = null,endtimestr = null;
+			//判断某一个会议是否满足要求
+			while (conference.next()){
+				starttimestr = conference.getString(4);
+				endtimestr = conference.getString(5);
+			}
+			cStart = sdf.parse(starttimestr);
+			cEnd = sdf.parse(endtimestr);
+			if(cStart.getTime() >= Start.getTime() && cEnd.getTime() <= End.getTime()){
+				this.printConference(meeting_id);
+				i++;
+			}
+		}
+		if (0 == i){
+			System.out.println("Can not find any conference");
+		}
+	}
+/////////////////////////////////////////////打印指定会议的信息////////////////////////////////////////////////
+	/**
+	 * 打印会议的信息以及参与者的id
+	 * @param meeting_id
+	 * @throws SQLException
+	 */
+	public void printConference(String meeting_id) throws SQLException{
+		sql = "select * from meeting where meeting_id='" + meeting_id + "';";
+		ResultSet rs = connection.executeSQL(sql);
+		while (rs.next()){
+			System.out.print(rs.getString(1) + " | ");
+			System.out.print(rs.getString(2) + " | ");
+			System.out.print(rs.getString(3) + " | ");
+			System.out.print(rs.getString(4) + " | ");
+			System.out.print(rs.getString(5) + " | ");
+		}
+		rs = this.searchRecordByConferenceId(meeting_id);
+		while (rs.next()){
+			System.out.print(rs.getString(2) + ", ");
+		}
+		System.out.print("\n");
+	}
+
+	///////////////////////////////////删除指定会议///////////////////////////////////////////////////
 	/**
 	 * 删除指定的会议
 	 * 能够判断指定的会议是否存在
@@ -499,11 +569,7 @@ public class Service {
 	 */
 	public void clearConference(String user_name) throws SQLException{
 		//获得用户的id
-		ResultSet rs = this.searchUserByUserName(user_name);
-		String user_id = null;
-		while (rs.next()){
-			user_id = rs.getString(1);
-		}
+		String user_id = this.getUserIdByName(user_name);
 		//确认这个人是否存在
 		boolean userexist = this.userExist(user_name);
 		if(userexist){
