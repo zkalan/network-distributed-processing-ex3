@@ -43,7 +43,7 @@ public class Service {
 			return true;
 		}
 	}
-	
+	///////////////////////////////11111111111111111111111/////////////////////////////////////////
 	
 	/**
 	 * 通过用户名查询用户的信息
@@ -79,7 +79,7 @@ public class Service {
 			return true;
 		}
 	}
-	
+	////////////////////////////////222222222222222222////////////////////////////////////////////////
 	
 	/**
 	 * 通过会议标题查询会议的信息
@@ -105,6 +105,23 @@ public class Service {
 		resultSet = connection.executeSQL(sql);
 		while (resultSet.next()){
 			if(resultSet.getString(2).equals(title)){
+				return true;
+			}
+		}
+		return false;
+	}
+	/**
+	 * 通过查询指定id的会议数量
+	 * 判断会议是否存在
+	 * @param meeting_id
+	 * @return
+	 * @throws SQLException
+	 */
+	public boolean conferenceExistById(String meeting_id) throws SQLException{
+		sql = "select count(meeting_id) from meeting where meeting_id='" + meeting_id + "';";
+		ResultSet rs = connection.executeSQL(sql);
+		while (rs.next()){
+			if(1 == rs.getInt(1)){
 				return true;
 			}
 		}
@@ -149,6 +166,23 @@ public class Service {
 		}
 	}
 	/**
+	 * 通过id删除指定会议
+	 * 注意
+	 * 会议的相关记录也会被删除
+	 * @param title
+	 * @return
+	 */
+	public boolean deleteConferenceById(String meeting_id){
+		sql = "delete meeting from meeting where meeting_id='" + meeting_id + "';";
+		try {
+			connection.updateSQL(sql);
+			return true;
+		} catch(Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/**
 	 * 删除指定用户名下所有创建的会议
 	 * @param user_id
 	 * @return
@@ -156,7 +190,7 @@ public class Service {
 	public boolean deleteConferenceByUserId(String user_id){
 		sql = "delete meeting from meeting where meeting_createrId='" + user_id + "';";
 		try {
-			connection.executeSQL(sql);
+			connection.updateSQL(sql);
 			return true;
 		} catch(Exception e){
 			e.printStackTrace();
@@ -172,14 +206,14 @@ public class Service {
 	public boolean deleteConferenceByTitleOfUser(String user_id,String meeting_title){
 		sql = "delete meeting from meeting where meeting_createrId='" + user_id + "' and meeting_title='" + meeting_title + "';";
 		try {
-			connection.executeSQL(sql);
+			connection.updateSQL(sql);
 			return true;
 		} catch(Exception e){
 			e.printStackTrace();
 			return false;
 		}
 	}
-	
+	////////////////////////////////////333333333333333333333/////////////////////////////////////////
 	
 	/**
 	 * 通过用户id查询获取记录
@@ -194,6 +228,14 @@ public class Service {
 	public ResultSet searchRecordByConferenceId(String meeting_id){
 		sql = "select * from record where record_meeting_id='" + meeting_id + "';";
 		return connection.executeSQL(sql);
+	}
+	public int getNumberOfConferenceAttender(String meeting_id) throws SQLException{
+		sql = "select count(record_user_id) from record where record_meeting_id='" + meeting_id + "';";
+		ResultSet rs = connection.executeSQL(sql);
+		while (rs.next()){
+			return rs.getInt(1);
+		}
+		return -1;
 	}
 	/**
 	 * 某个人是否参加了某个会议
@@ -258,7 +300,7 @@ public class Service {
 			return false;
 		}
 	}
-	
+	/////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	/**
 	 * 注册账户
@@ -324,13 +366,17 @@ public class Service {
 					meeting_id = meetingSet.getString(1);
 				}
 				//为会议添加参与者
-				this.addConferenceAttender(meeting_id, otheruser);
+				if(otheruser.equals(null) || otheruser.equals("") || otheruser.matches(";+")){
+					System.out.println("please input attender, at least one person");
+				} else {
+					this.addConferenceAttender(meeting_id, otheruser);
+				}
 			} else {
 				System.out.println("conference create failure");
 			}
 		}
 		if (true == meetingflag){
-			System.out.println("Conference " + title + "already exists");
+			System.out.println("Conference " + title + " already exists");
 		}
 	}
 	/**
@@ -370,6 +416,18 @@ public class Service {
 						System.out.println("User " + otherUser[i] + " join success");
 					}
 				}
+			}
+		}
+		//如果创建会议的参与人数小于2
+		//删除这个会议并且输出提示信息
+		int attendernumber = this.getNumberOfConferenceAttender(meeting_id);
+		if(attendernumber < 2){
+			//删除这个会议输出信息
+			boolean deleteflag = this.deleteConferenceById(meeting_id);
+			if(deleteflag){
+				System.out.println("Conference deleted, because number of attenders less than 2");
+			} else {
+				System.out.println("Number of attenders less than 2 but conference deleted failure");
 			}
 		}
 	}
@@ -423,7 +481,55 @@ public class Service {
 			}
 		}
 	}
-	
+	public void deleteConference(String meeting_id) throws SQLException{
+		//验证指定会议是否存在
+		boolean conferenceflag = false;
+		conferenceflag = this.conferenceExistById(meeting_id);
+		if (conferenceflag){
+			boolean deleteflag = false;
+			deleteflag = this.deleteConferenceById(meeting_id);
+			if (deleteflag){
+				System.out.println("Delete conference success");
+			} else {
+				System.out.println("Delete conference failure");
+			}
+		} else {
+			System.out.println("Conference does not exist");
+		}
+	}
+	/**
+	 * 通过用户名删除这个人创建的所有会议
+	 * 这个函数会判断是否存在这个人
+	 * @param user_name
+	 * @throws SQLException
+	 */
+	public void clearConference(String user_name) throws SQLException{
+		//获得用户的id
+		ResultSet rs = this.searchUserByUserName(user_name);
+		String user_id = null;
+		while (rs.next()){
+			user_id = rs.getString(1);
+		}
+		//确认这个人是否存在
+		boolean userexist = this.userExist(user_name);
+		if(userexist){
+			//用户存在，进行删除会议的操作
+			boolean clearflag = this.deleteConferenceByUserId(user_id);
+			if(clearflag){
+				//会议删除成功的提示信息
+				System.out.println("All of conference deleted success");
+			} else {
+				//会议删除失败的提示信息
+				System.out.println("All of conference deleted failure");
+			}
+		} else {
+			//用户不存在，输出提示信息
+			System.out.println("User does not exist");
+		}
+	}
+	/**
+	 * 关闭与数据库的连接
+	 */
 	public void close(){
 		this.connection.closeConnecetion();
 	}
