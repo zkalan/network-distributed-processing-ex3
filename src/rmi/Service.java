@@ -2,6 +2,9 @@ package rmi;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import sql.operateDB;
 /**
@@ -91,6 +94,18 @@ public class Service {
 		return connection.executeSQL(sql);
 	}
 	/**
+	 * 通过id查询会议
+	 * 判断会议是否存在
+	 * @param meeting_id
+	 * @return
+	 * @throws SQLException
+	 */
+	public ResultSet searchMeetingById(String meeting_id) throws SQLException{
+		sql = "select * from meeting where meeting_id='" + meeting_id + "';";
+		ResultSet rs = connection.executeSQL(sql);
+		return rs;
+	}
+	/**
 	 * 当会议被创建、查询、删除时判断会议是否存在
 	 * @param username
 	 * @param title
@@ -110,6 +125,7 @@ public class Service {
 		}
 		return false;
 	}
+	
 	/**
 	 * 通过查询指定id的会议数量
 	 * 判断会议是否存在
@@ -300,7 +316,7 @@ public class Service {
 			return false;
 		}
 	}
-	/////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////注册用户////////////////////////////////////////////////////
 	
 	/**
 	 * 注册账户
@@ -334,6 +350,7 @@ public class Service {
 			}
 		}
 	}
+/////////////////////////////////////////添加会议////////////////////////////////////////////////////
 	/**
 	 * 插入会议
 	 * @param username
@@ -343,49 +360,60 @@ public class Service {
 	 * @param endtime
 	 * @param title
 	 * @throws SQLException
+	 * @throws ParseException 
 	 */
-	public void addConference(String username,String passwd,String otheruser,String starttime,String endtime,String title)throws SQLException{
+	public void addConference(String username,String passwd,String otheruser,String starttime,String endtime,String title)throws SQLException, ParseException{
 		//首先判断用户是否登录成功
 		boolean loginflag = this.verifyLogin(username,passwd);
 		//然后判断该用户名下是否有同名会议
 		boolean meetingflag = this.conferenceExist(username, title);
 		if(loginflag && !meetingflag){
+			//获取用户的id
 			ResultSet rs = this.searchUserByUserName(username);
 			String user_id = null;
 			while (rs.next()){
 				user_id = rs.getString(1);
 			}
-			int insertflag = this.conferenceInsert(user_id, starttime, endtime, title);
-			//会议已经创建成功
-			if(-1 != insertflag){
-				System.out.println("conference create success");
-				//获得会议的id
-				ResultSet meetingSet = this.searchMeetingByTitle(title);
-				String meeting_id = null;
-				while (meetingSet.next()){
-					meeting_id = meetingSet.getString(1);
-				}
-				//为会议添加参与者
-				if(otheruser.equals(null) || otheruser.equals("") || otheruser.matches(";+")){
-					System.out.println("please input attender, at least one person");
-				} else {
-					this.addConferenceAttender(meeting_id, otheruser);
-				}
+			//首先判断这个用户是否有时间创建这个会议
+			if(haveUserTimeConflict(user_id,starttime,endtime)){
+				System.out.println("User time conflict, conference create failure");
 			} else {
-				System.out.println("conference create failure");
+				//创建会议
+				int insertflag = this.conferenceInsert(user_id, starttime, endtime, title);
+				//会议已经创建成功
+				if(-1 != insertflag){
+					System.out.println("conference create success");
+					//获得会议的id
+					ResultSet meetingSet = this.searchMeetingByTitle(title);
+					String meeting_id = null;
+					while (meetingSet.next()){
+						meeting_id = meetingSet.getString(1);
+					}
+					//为会议添加参与者
+					if(otheruser.equals(null) || otheruser.equals("") || otheruser.matches(";+")){
+						System.out.println("please input attender, at least one person");
+					} else {
+						this.recordInsert(user_id, meeting_id);
+						this.addConferenceAttender(meeting_id, otheruser,starttime,endtime);
+					}
+				} else {
+					System.out.println("conference create failure");
+				}
 			}
 		}
 		if (true == meetingflag){
 			System.out.println("Conference " + title + " already exists");
 		}
 	}
+///////////////////////////////////////////添加会议参与者//////////////////////////////////////////////////
 	/**
 	 * 创建会议参与者
 	 * @param meeting_id
 	 * @param otheruser
 	 * @throws SQLException 
+	 * @throws ParseException 
 	 */
-	public void addConferenceAttender(String meeting_id,String otheruser) throws SQLException{
+	public void addConferenceAttender(String meeting_id,String otheruser,String starttime,String endtime) throws SQLException, ParseException{
 		//获得参与者名单
 		String[] otherUser = otheruser.split(";");
 		for (int i = 0 ;i < otherUser.length;i++){
@@ -408,12 +436,17 @@ public class Service {
 				if (alreadyAttend){
 					System.out.println("User " + otherUser[i] + " already join in this Conference");
 				} else {
-					//执行插入操作
-					int insertflag = this.recordInsert(user_id, meeting_id);
-					if (-1 == insertflag){
-						System.out.println("User " + otherUser[i] + " join failure");
+					//首先判断这个用户是否存在时间冲突
+					if (haveUserTimeConflict(user_id,starttime,endtime)){
+						System.out.println("User " + otherUser[i] + " has time conflict");
 					} else {
-						System.out.println("User " + otherUser[i] + " join success");
+						//执行插入操作
+						int insertflag = this.recordInsert(user_id, meeting_id);
+						if (-1 == insertflag){
+							System.out.println("User " + otherUser[i] + " join failure");
+						} else {
+							System.out.println("User " + otherUser[i] + " join success");
+						}
 					}
 				}
 			}
@@ -431,56 +464,13 @@ public class Service {
 			}
 		}
 	}
-	
-
+///////////////////////////////////删除指定会议///////////////////////////////////////////////////
 	/**
-	 * 
-	 * @param username
-	 * @param passwd
-	 * @param otheruser
-	 * @param starttime
-	 * @param endtime
-	 * @param title
+	 * 删除指定的会议
+	 * 能够判断指定的会议是否存在
+	 * @param meeting_id
 	 * @throws SQLException
 	 */
-	public void createConference(String username,String passwd,String otheruser,String starttime,String endtime,String title) throws SQLException{
-		//首先判断用户是否登录成功
-		boolean login = this.verifyLogin(username, passwd);
-		//判断会议是否存在
-		boolean conferenceExist = this.conferenceExist(username, title);
-		if(login && conferenceExist){
-			System.out.println("Conference already exists");
-		} else {
-			//创建临时变量-结果集合
-			ResultSet rs = null;
-			//创建会议
-			this.conferenceInsert(username, starttime, endtime, title);
-			//获得用户输入的需要添加的参与会议的人
-			//获得会议的id
-			String meeting_id = null;
-			rs = this.searchMeetingByTitle(title);
-			while(rs.next()){
-				meeting_id = rs.getString(1);
-			}
-			String[] otherUser = otheruser.split(";");
-			//通过循环将参与会议的人的记录插入到记录表中去
-			for (int i = 0 ;i < otherUser.length;i++){
-				//首先判断这个用户是否存在
-				//如果不存在就输出提示信息，并且i++
-				//如果存在就进行插入操作，并且i++
-				if (false == this.searchUserByUserName(otherUser[i]).next()){
-					//输出用户不存在的提示信息
-					System.out.println("User " + otherUser[i] + " not exists");
-				} else {
-					//执行插入操作
-					rs = this.searchUserByUserName(otherUser[i]);
-					while (rs.next()){
-						this.recordInsert(rs.getString(1), meeting_id);
-					}
-				}
-			}
-		}
-	}
 	public void deleteConference(String meeting_id) throws SQLException{
 		//验证指定会议是否存在
 		boolean conferenceflag = false;
@@ -489,14 +479,18 @@ public class Service {
 			boolean deleteflag = false;
 			deleteflag = this.deleteConferenceById(meeting_id);
 			if (deleteflag){
+				//会议删除成功的提示信息
 				System.out.println("Delete conference success");
 			} else {
+				//会议删除失败的提示信息
 				System.out.println("Delete conference failure");
 			}
 		} else {
+			//会议不存在，输出提示信息
 			System.out.println("Conference does not exist");
 		}
 	}
+/////////////////////////////////////////////清除用户的全部会议////////////////////////////////////////////////
 	/**
 	 * 通过用户名删除这个人创建的所有会议
 	 * 这个函数会判断是否存在这个人
@@ -526,6 +520,44 @@ public class Service {
 			//用户不存在，输出提示信息
 			System.out.println("User does not exist");
 		}
+	}
+/////////////////////////////////////////////用户在某时间段是否有冲突////////////////////////////////////////////////
+	/**
+	 * 判断用户在指定的时间段内是否有空闲
+	 * @param user_id
+	 * @param starttime
+	 * @param endtime
+	 * @return
+	 * @throws SQLException
+	 * @throws ParseException
+	 */
+	public boolean haveUserTimeConflict(String user_id,String starttime,String endtime) throws SQLException, ParseException{
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+		Date Start = null,End = null;
+		Date cStart = null,cEnd = null;
+		try {
+			Start = sdf.parse(starttime);
+			End = sdf.parse(endtime);
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+		ResultSet userconferencerecord = this.searchRecordByUserId(user_id);
+		while(userconferencerecord.next()){
+			String meeting_id = userconferencerecord.getString(3);
+			ResultSet conference = this.searchMeetingById(meeting_id);
+			String starttimestr = null,endtimestr = null;
+			while (conference.next()){
+				starttimestr = conference.getString(4);
+				endtimestr = conference.getString(5);
+			}
+			cStart = sdf.parse(starttimestr);
+			cEnd = sdf.parse(endtimestr);
+			if ((Start.getTime() < cEnd.getTime() && Start.getTime() > cStart.getTime())
+					|| (End.getTime() > cStart.getTime() && End.getTime() < cEnd.getTime())){
+				return true;
+			}
+		}
+		return false;
 	}
 	/**
 	 * 关闭与数据库的连接
