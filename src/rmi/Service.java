@@ -1,5 +1,7 @@
 package rmi;
 
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
@@ -10,10 +12,15 @@ import sql.operateDB;
 /**
  * 
  * @author zk
- *
+ *让客户机与服务器对象实例建立一对一的连接
  */
-public class Service {
+public class Service extends UnicastRemoteObject implements ServiceInterface{
 	
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 2069495573148807859L;
+
 	operateDB connection;
 	
 	String sql = null;
@@ -24,8 +31,10 @@ public class Service {
 	 * Service的构造函数
 	 * 首先初始化一个全局的与服务器的连接
 	 */
-	public Service(){
+	public Service() throws RemoteException{
 		this.connection = new operateDB();
+		this.sql = null;
+		this.resultSet = null;
 	}
 	/**
 	 * 验证是否登录成功
@@ -34,7 +43,7 @@ public class Service {
 	 * @return
 	 * @throws SQLException
 	 */
-	public boolean verifyLogin(String username,String passwd) throws SQLException{
+	public boolean verifyLogin(String username,String passwd) throws SQLException,RemoteException{
 		resultSet = this.searchUserByUserName(username);
 		if (false == resultSet.next()){
 			System.out.println("Login failure:unknown user name or bad password");
@@ -374,8 +383,9 @@ public class Service {
 	 * @param title
 	 * @throws SQLException
 	 * @throws ParseException 
+	 * @throws RemoteException 
 	 */
-	public void addConference(String username,String passwd,String otheruser,String starttime,String endtime,String title)throws SQLException, ParseException{
+	public void addConference(String username,String passwd,String otheruser,String starttime,String endtime,String title)throws SQLException, ParseException, RemoteException{
 		//首先判断用户是否登录成功
 		boolean loginflag = this.verifyLogin(username,passwd);
 		//然后判断该用户名下是否有同名会议
@@ -479,36 +489,50 @@ public class Service {
 	 * @param endtime
 	 * @throws SQLException
 	 * @throws ParseException
+	 * @throws RemoteException 
 	 */
-	public void conferenceSearch(String user_name,String starttime,String endtime) throws SQLException, ParseException{
-		//统计有多少会议满足时间要求
-		int i = 0;
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-		Date Start = sdf.parse(starttime);
-		Date End = sdf.parse(endtime);
-		Date cStart = null,cEnd = null;
-		String user_id = this.getUserIdByName(user_name);
-		ResultSet conferenceSet = this.searchRecordByUserId(user_id);
-		System.out.println("id | title | CId | meeting_startDatetime | meeting_endDatetime | attender");
-		//循环获得记录表中的指定用户参与的会议
-		while(conferenceSet.next()){
-			String meeting_id = conferenceSet.getString(3);
-			ResultSet conference = this.searchMeetingById(meeting_id);
-			String starttimestr = null,endtimestr = null;
-			//判断某一个会议是否满足要求
-			while (conference.next()){
-				starttimestr = conference.getString(4);
-				endtimestr = conference.getString(5);
+	public void conferenceSearch(String user_name,String passwd,String starttime,String endtime) throws SQLException, ParseException, RemoteException{
+		//首先验证登录
+		if(this.verifyLogin(user_name, passwd)){
+			//统计有多少会议满足时间要求
+			int i = 0;
+			SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+			Date Start = sdf.parse(starttime);
+			Date End = sdf.parse(endtime);
+			Date cStart = null,cEnd = null;
+			String user_id = this.getUserIdByName(user_name);
+			//构造查询的特殊sql语句
+			//包括外键的使用
+			//表的别名
+			//left join
+			//按照时间排序
+			//desc为降续排列
+			sql = "select * from record r1 left join meeting m1 on r1.record_meeting_id=m1.meeting_id "
+					+ "where r1.record_user_id='" + user_id +"' order by meeting_startDatetime;";
+			ResultSet conferenceSet = this.connection.executeSQL(sql);
+			System.out.println("id | title | CId | meeting_startDatetime | meeting_endDatetime | attender");
+			//循环判断组合查询记录表中的指定用户参与的会议
+			while(conferenceSet.next()){
+				String starttimestr = null;
+				String endtimestr = null;
+				starttimestr = conferenceSet.getString(7);
+				endtimestr = conferenceSet.getString(8);
+				
+				cStart = sdf.parse(starttimestr);
+				cEnd = sdf.parse(endtimestr);
+				if(cStart.getTime() >= Start.getTime() && cEnd.getTime() <= End.getTime()){
+					System.out.print(conferenceSet.getString(4) + " | ");
+					System.out.print(conferenceSet.getString(5) + " | ");
+					System.out.print(conferenceSet.getString(6) + " | ");
+					System.out.print(conferenceSet.getString(7) + " | ");
+					System.out.print(conferenceSet.getString(8) + " | ");
+					this.printConferenceAttender(conferenceSet.getString(4));
+					i++;
+				}
 			}
-			cStart = sdf.parse(starttimestr);
-			cEnd = sdf.parse(endtimestr);
-			if(cStart.getTime() >= Start.getTime() && cEnd.getTime() <= End.getTime()){
-				this.printConference(meeting_id);
-				i++;
+			if (0 == i){
+				System.out.println("Can not find any conference");
 			}
-		}
-		if (0 == i){
-			System.out.println("Can not find any conference");
 		}
 	}
 /////////////////////////////////////////////打印指定会议的信息////////////////////////////////////////////////
@@ -517,16 +541,9 @@ public class Service {
 	 * @param meeting_id
 	 * @throws SQLException
 	 */
-	public void printConference(String meeting_id) throws SQLException{
+	public void printConferenceAttender(String meeting_id) throws SQLException{
 		sql = "select * from meeting where meeting_id='" + meeting_id + "';";
 		ResultSet rs = connection.executeSQL(sql);
-		while (rs.next()){
-			System.out.print(rs.getString(1) + " | ");
-			System.out.print(rs.getString(2) + " | ");
-			System.out.print(rs.getString(3) + " | ");
-			System.out.print(rs.getString(4) + " | ");
-			System.out.print(rs.getString(5) + " | ");
-		}
 		rs = this.searchRecordByConferenceId(meeting_id);
 		while (rs.next()){
 			System.out.print(rs.getString(2) + ", ");
@@ -540,24 +557,31 @@ public class Service {
 	 * 能够判断指定的会议是否存在
 	 * @param meeting_id
 	 * @throws SQLException
+	 * @throws RemoteException 
 	 */
-	public void deleteConference(String meeting_id) throws SQLException{
-		//验证指定会议是否存在
-		boolean conferenceflag = false;
-		conferenceflag = this.conferenceExistById(meeting_id);
-		if (conferenceflag){
-			boolean deleteflag = false;
-			deleteflag = this.deleteConferenceById(meeting_id);
-			if (deleteflag){
-				//会议删除成功的提示信息
-				System.out.println("Delete conference success");
+	public void deleteConference(String user_name,String passwd,String meeting_id) throws SQLException, RemoteException{
+		//首先验证登录
+		if(this.verifyLogin(user_name, passwd)){
+			//验证指定会议是否存在
+			boolean conferenceflag = false;
+			conferenceflag = this.conferenceExistById(meeting_id);
+			if (conferenceflag){
+				int deleteflag = -1;
+				//构造删除sql语句
+				String user_id = this.getUserIdByName(user_name);
+				sql = "delete meeting from meeting where meeting_createrId='" + user_id + "' and meeting_id='" + meeting_id + "';";
+				deleteflag = this.connection.updateSQL(sql);
+				if (1 == deleteflag){
+					//会议删除成功的提示信息
+					System.out.println("Delete conference success");
+				} else {
+					//会议删除失败的提示信息
+					System.out.println("Delete conference failure, Insufficient permissions or parameter errors");
+				}
 			} else {
-				//会议删除失败的提示信息
-				System.out.println("Delete conference failure");
+				//会议不存在，输出提示信息
+				System.out.println("Conference does not exist");
 			}
-		} else {
-			//会议不存在，输出提示信息
-			System.out.println("Conference does not exist");
 		}
 	}
 /////////////////////////////////////////////清除用户的全部会议////////////////////////////////////////////////
@@ -566,25 +590,29 @@ public class Service {
 	 * 这个函数会判断是否存在这个人
 	 * @param user_name
 	 * @throws SQLException
+	 * @throws RemoteException 
 	 */
-	public void clearConference(String user_name) throws SQLException{
-		//获得用户的id
-		String user_id = this.getUserIdByName(user_name);
-		//确认这个人是否存在
-		boolean userexist = this.userExist(user_name);
-		if(userexist){
-			//用户存在，进行删除会议的操作
-			boolean clearflag = this.deleteConferenceByUserId(user_id);
-			if(clearflag){
-				//会议删除成功的提示信息
-				System.out.println("All of conference deleted success");
+	public void clearConference(String user_name,String passwd) throws SQLException, RemoteException{
+		//首先验证登录
+		if(this.verifyLogin(user_name, passwd)){
+			//获得用户的id
+			String user_id = this.getUserIdByName(user_name);
+			//确认这个人是否存在
+			boolean userexist = this.userExist(user_name);
+			if(userexist){
+				//用户存在，进行删除会议的操作
+				boolean clearflag = this.deleteConferenceByUserId(user_id);
+				if(clearflag){
+					//会议删除成功的提示信息
+					System.out.println("All of conference deleted success");
+				} else {
+					//会议删除失败的提示信息
+					System.out.println("All of conference deleted failure");
+				}
 			} else {
-				//会议删除失败的提示信息
-				System.out.println("All of conference deleted failure");
+				//用户不存在，输出提示信息
+				System.out.println("User does not exist");
 			}
-		} else {
-			//用户不存在，输出提示信息
-			System.out.println("User does not exist");
 		}
 	}
 /////////////////////////////////////////////用户在某时间段是否有冲突////////////////////////////////////////////////
@@ -628,7 +656,7 @@ public class Service {
 	/**
 	 * 关闭与数据库的连接
 	 */
-	public void close(){
+	public void close()throws RemoteException{
 		this.connection.closeConnecetion();
 	}
 
