@@ -27,7 +27,13 @@ public class Client {
 			
 			service = (ServiceInterface)Naming.lookup(registryURL);
 			
-			service.register("user8", "user8");
+			System.out.print(service.register("user8", "user8"));
+			System.out.print(service.addConference("user1", "user1", "user1;user2;user3;user5;user6;user7;user8", "1990-10-19 20:00:00", "1991-11-1 20:00:00", "client user1 3"));
+			System.out.print(service.addConference("user4", "user4", "user1;user2;user3;user5;user6;user7;user8", "1999-10-19 20:00:00", "1999-11-1 20:00:00", "client user4 4"));
+			System.out.print(service.conferenceSearch("user4", "user4", "1990-1-1 10:0:0", "2050-1-1 10:0:0"));
+//			System.out.println(service.deleteConference("user1", "user1", "35"));
+//			System.out.println(service.clearConference("user4", "user4"));
+			System.out.print(service.addConference("user4", "user4", "user1;user2;user3;user5;user6;user7;user8", "1999-10-19 20:00:00", "1999-10-1 20:00:00", "client user4 10"));
 			
 			if (cin.readLine().equals("help")){
 				client.menu();
