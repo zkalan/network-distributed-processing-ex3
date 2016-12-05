@@ -36,7 +36,7 @@ public class Service {
 		if (false == resultSet.next()){
 			System.out.println("Login failure:unknown user name or bad password");
 			return false;
-		} else if(passwd != resultSet.getString(3)){
+		} else if(!resultSet.getString(3).equals(passwd)){
 			System.out.println("Login failure:unknown user name or bad password");
 			return false;
 		} else {
@@ -104,7 +104,7 @@ public class Service {
 		}
 		resultSet = connection.executeSQL(sql);
 		while (resultSet.next()){
-			if(title == resultSet.getString(2)){
+			if(resultSet.getString(2).equals(title)){
 				return true;
 			}
 		}
@@ -196,6 +196,26 @@ public class Service {
 		return connection.executeSQL(sql);
 	}
 	/**
+	 * 某个人是否参加了某个会议
+	 * @param meeting_id
+	 * @param user_id
+	 * @return
+	 */
+	public boolean recordOfUserInConferenceExist(String meeting_id,String user_id){
+		sql = "select * from record where record_user_id='" + user_id + "' and record_meeting_id='" + meeting_id + "';";
+		try {
+			ResultSet result = connection.executeSQL(sql);
+			if (false == result.next()){
+				return false;
+			} else {
+				return true;
+			}
+		} catch (Exception e){
+			e.printStackTrace();
+			return false;
+		}
+	}
+	/**
 	 * 添加记录
 	 * @param user_id
 	 * @param meeting_id
@@ -251,26 +271,109 @@ public class Service {
 	 */
 	public void register(String username,String passwd) throws SQLException{
 		
-		int result = this.userInsert(username, passwd);
+		//首先检测用户名是否已被占用
+		boolean flag = this.userExist(username);
 		
-		if (-1 == result){
+		if (flag){
 			System.out.println("User name already exists");
 		} else {
-			System.out.println("Register success\nUser information:");
-			resultSet = searchUserByUserName(username);
-			while(resultSet.next()){
-				System.out.println("User-id:" + resultSet.getString(1));
-				System.out.println("User-name:" + resultSet.getString(2));
-				System.out.println("User-passwd:" + resultSet.getString(3));
+			try {
+				this.userInsert(username, passwd);
+				resultSet = searchUserByUserName(username);
+				System.out.println("Register success\nUser information:");
+				while(resultSet.next()){
+					System.out.println("User-id:" + resultSet.getString(1));
+					System.out.println("User-name:" + resultSet.getString(2));
+					System.out.println("User-passwd:" + resultSet.getString(3));
+				}
+			} catch (Exception e){
+				e.printStackTrace();
+				System.out.println("Register failure");
 			}
 		}
 	}
-	public void addConference(String username,String starttime,String endtime,String title){
+	/**
+	 * 插入会议
+	 * @param username
+	 * @param passwd
+	 * @param otheruser
+	 * @param starttime
+	 * @param endtime
+	 * @param title
+	 * @throws SQLException
+	 */
+	public void addConference(String username,String passwd,String otheruser,String starttime,String endtime,String title)throws SQLException{
 		//首先判断用户是否登录成功
+		boolean loginflag = this.verifyLogin(username,passwd);
 		//然后判断该用户名下是否有同名会议
-		//然后判断参与者是否存在
-		//然后判断参与者是否已经加入该会议
+		boolean meetingflag = this.conferenceExist(username, title);
+		if(loginflag && !meetingflag){
+			ResultSet rs = this.searchUserByUserName(username);
+			String user_id = null;
+			while (rs.next()){
+				user_id = rs.getString(1);
+			}
+			int insertflag = this.conferenceInsert(user_id, starttime, endtime, title);
+			//会议已经创建成功
+			if(-1 != insertflag){
+				System.out.println("conference create success");
+				//获得会议的id
+				ResultSet meetingSet = this.searchMeetingByTitle(title);
+				String meeting_id = null;
+				while (meetingSet.next()){
+					meeting_id = meetingSet.getString(1);
+				}
+				//为会议添加参与者
+				this.addConferenceAttender(meeting_id, otheruser);
+			} else {
+				System.out.println("conference create failure");
+			}
+		}
+		if (true == meetingflag){
+			System.out.println("Conference " + title + "already exists");
+		}
 	}
+	/**
+	 * 创建会议参与者
+	 * @param meeting_id
+	 * @param otheruser
+	 * @throws SQLException 
+	 */
+	public void addConferenceAttender(String meeting_id,String otheruser) throws SQLException{
+		//获得参与者名单
+		String[] otherUser = otheruser.split(";");
+		for (int i = 0 ;i < otherUser.length;i++){
+			//首先判断这个用户是否存在
+			boolean userflag = this.userExist(otherUser[i]);
+			//如果不存在就输出提示信息，并且i++
+			//如果存在就进行插入操作，并且i++
+			if (!userflag){
+				//输出用户不存在的提示信息
+				System.out.println("User " + otherUser[i] + " not exists");
+			} else {
+				//获得用户的id
+				ResultSet rs = this.searchUserByUserName(otherUser[i]);
+				String user_id = null;
+				while (rs.next()){
+					user_id = rs.getString(1);
+				}
+				//该用户是否已经加入了该会议
+				boolean alreadyAttend = this.recordOfUserInConferenceExist(meeting_id,user_id);
+				if (alreadyAttend){
+					System.out.println("User " + otherUser[i] + " already join in this Conference");
+				} else {
+					//执行插入操作
+					int insertflag = this.recordInsert(user_id, meeting_id);
+					if (-1 == insertflag){
+						System.out.println("User " + otherUser[i] + " join failure");
+					} else {
+						System.out.println("User " + otherUser[i] + " join success");
+					}
+				}
+			}
+		}
+	}
+	
 
 	/**
 	 * 
