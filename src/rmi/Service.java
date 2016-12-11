@@ -80,6 +80,21 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 		return null;
 	}
 	/**
+	 * 通过用户的id查询获得用户的名字
+	 * @param id
+	 * @return
+	 * @throws SQLException
+	 */
+	public String getUserNameById(String id) throws SQLException{
+		
+		sql = "select * from user where user_id='"+ id + "';";
+		ResultSet rs = connection.executeSQL(sql);
+		while(rs.next()){
+			return rs.getString(2);
+		}
+		return null;
+	}
+	/**
 	 * 向用户表插入新的值
 	 * @param username
 	 * @param passwd
@@ -592,13 +607,13 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 	public String printConferenceAttender(String meeting_id) throws SQLException{
 		
 		StringBuilder sb = new StringBuilder();
-		
+		//查询meeting得到制定会议的参与者
 		sql = "select * from meeting where meeting_id='" + meeting_id + "';";
 		ResultSet rs = connection.executeSQL(sql);
 		rs = this.searchRecordByConferenceId(meeting_id);
 		while (rs.next()){
 			System.out.print(rs.getString(2) + ", ");
-			sb.append(rs.getString(2) + ", ");
+			sb.append(this.getUserNameById(rs.getString(2)) + ", ");
 		}
 		System.out.print("\n");
 		sb.append("\n");

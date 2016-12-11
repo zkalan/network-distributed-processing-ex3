@@ -12,6 +12,8 @@ public interface ServiceInterface extends Remote{
 	 */
 	static final long serialVersionUID = -3654859414036481202L;
 
+	//登陆函数
+	public boolean verifyLogin(String username,String passwd) throws SQLException,RemoteException;
 	//注册函数接口
 	public String register(String username,String passwd) throws SQLException,RemoteException;
 	//添加会议的接口
