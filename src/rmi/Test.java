@@ -30,7 +30,7 @@ public class Test {
 //		System.out.println(service.haveUserTimeConflict("63", "2016-12-11 10:00:00", "2016-12-20 11:00:00"));
 		//service.addConference("user1","user1","user2;user3","2016-12-11 10:00:00","2016-12-20 11:00:00","conference 3");
 		System.out.println(service.addConference("user4","user4","user1;user2;user3;user4;user5;user6",
-				"1990-10-19 20:00:00","1991-11-01 20:00:00","conference 9"));
+				"2000-10-19 20:00:00","1999-11-01 20:00:00","conference 10"));
 //		service.printConference("29");
 //		service.conferenceSearch("user4", "user4","2010-11-02 10:00:00","2017-12-11 11:00:00");
 //		service.deleteConference("user4", "user4", "29");

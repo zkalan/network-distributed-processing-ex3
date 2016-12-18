@@ -742,7 +742,9 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 	 * 关闭与数据库的连接
 	 */
 	public void close()throws RemoteException{
-		this.connection.closeConnecetion();
+		if (connection != null){
+			this.connection.closeConnecetion();
+		}
 	}
 
 }
