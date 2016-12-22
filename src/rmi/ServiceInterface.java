@@ -28,4 +28,10 @@ public interface ServiceInterface extends Remote{
 	public String clearConference(String user_name,String passwd) throws SQLException,RemoteException;
 	//关闭数据库连接
 	public void close()throws RemoteException;
+	
+	//单个添加会议参与者
+	public String addConferenceAttender(String meeting_id,String otheruser) throws SQLException, ParseException,RemoteException;
+	
+	//单个删除会议参与者
+	public String deleteConferenceAttender(String meeting_id,String otheruser) throws SQLException, ParseException,RemoteException;
 }

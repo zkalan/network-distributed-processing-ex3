@@ -55,7 +55,7 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 			return true;
 		}
 	}
-	///////////////////////////////11111111111111111111111/////////////////////////////////////////
+	///////////////////////////////操作user表/////////////////////////////////////////
 	
 	/**
 	 * 通过用户名查询用户的信息
@@ -119,7 +119,7 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 			return true;
 		}
 	}
-	////////////////////////////////222222222222222222////////////////////////////////////////////////
+	////////////////////////////////操作meeting表////////////////////////////////////////////////
 	
 	/**
 	 * 通过会议标题查询会议的信息
@@ -266,7 +266,7 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 			return false;
 		}
 	}
-	////////////////////////////////////333333333333333333333/////////////////////////////////////////
+	////////////////////////////////////操作record表/////////////////////////////////////////
 	
 	/**
 	 * 通过用户id查询获取记录
@@ -447,7 +447,7 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 						sb.append("please input attender, at least one person\n");
 					} else {
 						this.recordInsert(user_id, meeting_id);
-						sb.append(this.addConferenceAttender(meeting_id, otheruser,starttime,endtime));
+						sb.append(this.addConferenceAttender(meeting_id, otheruser));
 					}
 				} else {
 					System.out.println("conference create failure");
@@ -469,7 +469,7 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 	 * @throws SQLException 
 	 * @throws ParseException 
 	 */
-	public String addConferenceAttender(String meeting_id,String otheruser,String starttime,String endtime) throws SQLException, ParseException{
+	public String addConferenceAttender(String meeting_id,String otheruser) throws SQLException, ParseException,RemoteException{
 		
 		StringBuilder sb = new StringBuilder();
 		
@@ -493,6 +493,14 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 					System.out.println("User " + otherUser[i] + " already join in this Conference");
 					sb.append("User " + otherUser[i] + " already join in this Conference\n");
 				} else {
+					//通过会议的id查询开始时间和结束时间
+					ResultSet temp = this.searchMeetingById(meeting_id);
+					String starttime = null;
+					String endtime = null;
+					while(temp.next()){
+						starttime = temp.getString(4);
+						endtime = temp.getString(5);
+					}
 					//首先判断这个用户是否存在时间冲突
 					if (haveUserTimeConflict(user_id,starttime,endtime)){
 						System.out.println("User " + otherUser[i] + " has time conflict");
@@ -527,6 +535,67 @@ public class Service extends UnicastRemoteObject implements ServiceInterface{
 		}
 		return sb.toString();
 	}
+///////////////////////////////////////////删除会议参与者//////////////////////////////////////////////////
+	/**
+	 * 删除会议参与者
+	 * @param meeting_id
+	 * @param otheruser
+	 * @throws SQLException 
+	 * @throws ParseException 
+	 */
+	public String deleteConferenceAttender(String meeting_id,String otheruser) throws SQLException, ParseException,RemoteException{
+		
+		StringBuilder sb = new StringBuilder();
+		
+		//获得参与者名单
+		String[] otherUser = otheruser.split(";");
+		for (int i = 0 ;i < otherUser.length;i++){
+			//首先判断这个用户是否存在
+			boolean userflag = this.userExist(otherUser[i]);
+			//如果不存在就输出提示信息，并且i++
+			//如果存在就进行插入操作，并且i++
+			if (!userflag){
+				//输出用户不存在的提示信息
+				System.out.println("User " + otherUser[i] + " not exists");
+				sb.append("User " + otherUser[i] + " not exists\n");
+			} else {
+				//获得用户的id
+				String user_id = this.getUserIdByName(otherUser[i]);
+				//该用户是否已经加入了该会议
+				boolean alreadyAttend = this.recordOfUserInConferenceExist(meeting_id,user_id);
+				if (alreadyAttend){
+					//执行删除操作
+					boolean deleteflag = this.deleteRecordByUserOfConference(user_id, meeting_id);
+					if (deleteflag){
+						System.out.println("User " + otherUser[i] + " delete success");
+						sb.append("User " + otherUser[i] + " delete success\n");
+					} else {
+						System.out.println("User " + otherUser[i] + " delete failure");
+						sb.append("User " + otherUser[i] + " delete failure\n");
+					}
+				} else {
+					System.out.println("User " + otherUser[i] + " already delete from Conference");
+					sb.append("User " + otherUser[i] + " already delete from Conference\n");
+				}
+			}
+		}
+		//如果创建会议的参与人数小于2
+		//删除这个会议并且输出提示信息
+		int attendernumber = this.getNumberOfConferenceAttender(meeting_id);
+		if(attendernumber < 2){
+			//删除这个会议输出信息
+			boolean deleteflag = this.deleteConferenceById(meeting_id);
+			if(deleteflag){
+				System.out.println("Conference deleted, because number of attenders less than 2");
+				sb.append("Conference deleted, because number of attenders less than 2\n");
+			} else {
+				System.out.println("Number of attenders less than 2 but conference deleted failure");
+				sb.append("Number of attenders less than 2 but conference deleted failure\n");
+			}
+		}
+		return sb.toString();
+	}
+
 /////////////////////////////////////////////查询指定时间段内的会议////////////////////////////////////////////////
 	
 	/**
